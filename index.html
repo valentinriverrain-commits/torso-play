@@ -1,0 +1,1110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Torso — Play</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Interface reprise du site Torso : fond blanc, grande carte grise arrondie, barre flottante translucide,
+     onglets à 6 px de rayon, bouton d'action bleu à 10 px, Aeonik 13 px. */
+  :root {
+    --ink: #343433; --mute: #7E7E7C; --card: #CACAC8; --glass: rgba(227,227,225,.65); --seg: rgba(202,202,200,.5);
+    --tab-on: rgba(126,126,124,.4); --blue: #0022B1; --orange: #D85700;
+    --sans: Aeonik, "Aeonik Regular", Inter, system-ui, sans-serif; --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: #fff; color: var(--ink); font: 13px var(--sans); }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+
+  header { height: 64px; display: flex; align-items: center; justify-content: space-between; padding: 0 32px; }
+  .logo svg { height: 26px; width: auto; display: block; }
+  header .note { font-size: 13px; color: var(--mute); }
+
+  #stage { position: fixed; top: 64px; left: 16px; right: 16px; bottom: 16px; border-radius: 20px; overflow: hidden;
+    background: radial-gradient(110% 85% at 50% 42%, #D9D9D7 0%, #CACAC8 55%, #BDBDBB 100%); }
+  #stage canvas { display: block; touch-action: none; }
+
+  /* ── Barre flottante (comme la sous-navigation produit du site Torso) ── */
+  .subnav { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px;
+    padding: 15px; border-radius: 20px; background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2; }
+  .mark { height: 35px; min-width: 52px; padding: 0 8px; display: grid; place-items: center; border: 1.6px solid var(--ink);
+    border-radius: 8px; font-size: 20px; letter-spacing: -0.02em; }
+  .seg { display: flex; gap: 5px; padding: 5px; border-radius: 12px; background: var(--seg); }
+  .seg button { white-space: nowrap; padding: 5px 10px; border-radius: 6px; font-size: 13px; color: var(--ink); line-height: 15px; transition: background .2s; }
+  .seg button:hover { background: rgba(126,126,124,.2); }
+  .seg button.on { background: var(--tab-on); }
+  .cta { height: 35px; padding: 0 16px; border-radius: 10px; background: var(--blue); color: #fff; font-size: 13px;
+    display: flex; align-items: center; gap: 8px; transition: background .2s; }
+  .cta i { width: 0; height: 0; border-left: 7px solid #fff; border-top: 4.5px solid transparent; border-bottom: 4.5px solid transparent; }
+  .cta.on { background: var(--orange); }
+  .cta.on i { border: 0; width: 8px; height: 8px; background: #fff; }
+
+  /* ── Bas de la carte ── */
+  .foot { position: absolute; left: 32px; right: 32px; bottom: 28px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; pointer-events: none; transition: opacity .35s; }
+  .foot > * { pointer-events: auto; }
+  .foot.fade { opacity: 0; }
+  .eyebrow { font-size: 13px; color: var(--mute); }
+  .pname { font-size: clamp(56px, 8.5vw, 120px); letter-spacing: -0.045em; line-height: .86; margin: 8px 0 16px -4px; }
+  .readout { display: flex; align-items: baseline; gap: 10px; min-height: 20px; }
+  .readout span { font: 11px var(--mono); color: var(--mute); letter-spacing: .06em; text-transform: uppercase; }
+  .readout b { font-size: 17px; font-weight: 400; }
+  .help { font-size: 13px; line-height: 1.45; color: var(--mute); max-width: 420px; margin-top: 6px; min-height: 19px; }
+  .controls { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+  .controls .label { font-size: 13px; color: var(--mute); }
+  .controls .seg button { display: flex; align-items: center; gap: 7px; }
+  .controls .seg button i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink); opacity: .25; }
+  .controls .seg button.hit i { background: var(--orange); opacity: 1; }
+  .controls .seg button.muted { opacity: .45; text-decoration: line-through; }
+  .hint { font-size: 12px; line-height: 1.6; color: var(--mute); text-align: right; }
+
+  /* ── Fiche technique ── */
+  .specs { position: absolute; top: 110px; right: 24px; width: min(380px, calc(100% - 48px)); padding: 20px; border-radius: 20px;
+    background: var(--glass); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); z-index: 2;
+    opacity: 0; transform: translateY(-8px); pointer-events: none; transition: opacity .25s, transform .25s; max-height: calc(100% - 140px); overflow: auto; }
+  .specs.open { opacity: 1; transform: none; pointer-events: auto; }
+  .specs h3 { font-size: 20px; font-weight: 400; letter-spacing: -0.01em; margin-bottom: 14px; }
+  .specs dl { display: grid; grid-template-columns: 110px 1fr; gap: 10px 14px; }
+  .specs dt { font: 11px var(--mono); color: var(--mute); letter-spacing: .05em; padding-top: 2px; }
+  .specs dd { font-size: 13px; line-height: 1.4; }
+  .specs .price { margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(52,52,51,.15); display: flex; justify-content: space-between; font-size: 15px; }
+
+  .tip { position: fixed; padding: 5px 9px; border-radius: 6px; background: var(--ink); color: #fff; font: 11px var(--mono);
+    pointer-events: none; opacity: 0; transform: translate(-50%, -150%); transition: opacity .12s; white-space: nowrap; z-index: 5; }
+  .loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mute); }
+  @media (max-width: 760px) {
+    header { padding: 0 20px; } header .note { display: none; }
+    #stage { left: 8px; right: 8px; bottom: 8px; }
+    .subnav { top: 12px; padding: 10px; gap: 8px; } .mark, .seg.views { display: none; }
+    .foot { left: 20px; right: 20px; bottom: 20px; flex-direction: column; align-items: flex-start; }
+    .controls { align-items: flex-start; } .hint, .help { display: none; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 33" aria-label="torso electronics"><path fill="#343433" d="M 9.078 13.41 L 9.078 20.599 C 9.078 21.823 9.364 22.729 9.935 23.315 C 10.506 23.901 11.414 24.194 12.659 24.194 L 15.318 24.194 L 15.318 21.737 L 13.221 21.737 C 12.726 21.737 12.376 21.629 12.172 21.413 C 11.968 21.198 11.865 20.831 11.865 20.314 L 11.865 13.41 L 15.011 13.41 L 15.011 10.953 L 11.865 10.953 L 11.865 7.256 L 9.077 7.256 L 9.077 10.953 L 6.801 10.953 L 6.801 13.41 Z M 30.865 21.519 C 30.277 21.08 29.957 20.515 29.906 19.825 L 27.246 19.825 C 27.28 21.24 27.838 22.347 28.921 23.148 C 30.003 23.95 31.422 24.351 33.179 24.351 C 34.219 24.351 35.157 24.182 35.992 23.846 C 36.828 23.51 37.484 23.027 37.962 22.398 C 38.44 21.768 38.678 21.039 38.678 20.212 C 38.678 19.281 38.449 18.544 37.988 18.001 C 37.528 17.459 36.914 17.062 36.147 16.812 C 35.379 16.562 34.433 16.377 33.308 16.256 C 32.472 16.153 31.868 16.062 31.492 15.985 C 31.117 15.907 30.806 15.769 30.559 15.571 C 30.312 15.373 30.188 15.077 30.188 14.68 C 30.188 14.146 30.435 13.723 30.929 13.412 C 31.424 13.102 32.071 12.947 32.872 12.947 C 33.674 12.947 34.339 13.141 34.867 13.529 C 35.396 13.917 35.695 14.412 35.763 15.016 L 38.449 15.016 C 38.363 13.671 37.805 12.627 36.774 11.887 C 35.743 11.145 34.399 10.774 32.746 10.774 C 31.74 10.774 30.84 10.947 30.047 11.292 C 29.254 11.637 28.632 12.124 28.181 12.753 C 27.729 13.382 27.503 14.101 27.503 14.912 C 27.503 15.774 27.729 16.459 28.181 16.968 C 28.632 17.476 29.229 17.848 29.971 18.08 C 30.712 18.312 31.654 18.497 32.797 18.636 C 33.633 18.738 34.251 18.837 34.651 18.932 C 35.053 19.028 35.373 19.186 35.611 19.411 C 35.849 19.635 35.969 19.971 35.969 20.419 C 35.969 20.953 35.709 21.38 35.188 21.699 C 34.668 22.017 33.99 22.177 33.155 22.177 C 32.216 22.177 31.454 21.957 30.865 21.517 Z M 42.989 23.509 C 44.004 24.069 45.166 24.35 46.48 24.35 C 47.793 24.35 48.956 24.069 49.971 23.509 C 50.986 22.948 51.77 22.155 52.325 21.129 C 52.879 20.104 53.156 18.902 53.156 17.574 C 53.156 16.246 52.879 15.07 52.325 14.044 C 51.77 13.018 50.986 12.221 49.971 11.652 C 48.956 11.082 47.793 10.798 46.48 10.798 C 45.166 10.798 44.004 11.082 42.989 11.652 C 41.974 12.221 41.19 13.018 40.635 14.044 C 40.081 15.07 39.804 16.229 39.804 17.574 C 39.804 18.918 40.081 20.103 40.635 21.129 C 41.19 22.155 41.974 22.948 42.989 23.509 Z M 49.28 20.741 C 48.572 21.559 47.639 21.969 46.48 21.969 C 45.321 21.969 44.391 21.56 43.692 20.741 C 42.994 19.923 42.644 18.866 42.644 17.574 C 42.644 16.281 42.994 15.226 43.692 14.407 C 44.391 13.589 45.321 13.179 46.48 13.179 C 47.639 13.179 48.572 13.587 49.28 14.407 C 49.988 15.225 50.341 16.281 50.341 17.574 C 50.341 18.866 49.988 19.922 49.28 20.741 Z M 22.831 5.278 L 20.084 5.278 L 20.084 27.689 L 22.831 27.689 Z M 52.708 33 C 56.735 33 60 29.699 60 25.628 L 60 7.372 C 60 3.332 56.786 0.052 52.803 0.001 L 52.708 0 L 7.292 0 L 7.197 0.001 C 3.214 0.052 0 3.333 0 7.372 L 0 25.628 L 0.001 25.723 C 0.051 29.751 3.296 33 7.292 33 L 7.292 30.543 C 4.607 30.543 2.431 28.342 2.431 25.628 L 2.431 7.372 C 2.431 4.658 4.607 2.457 7.292 2.457 L 52.708 2.457 C 55.393 2.457 57.569 4.658 57.569 7.372 L 57.569 25.628 C 57.569 28.342 55.393 30.543 52.708 30.543 L 52.708 30.543 L 7.292 30.543 L 7.292 33 L 52.708 33 Z"/></svg>
+</div>
+  <div class="note">Interactive instruments — speculative project</div>
+</header>
+<div id="stage">
+  <div class="loading" id="loading">Loading…</div>
+  <div class="subnav">
+    <div class="mark" id="mark">T1</div>
+    <div class="seg" id="switch"><button data-id="t1" class="on">T-1 Sequencer</button><button data-id="s4">S-4 Sampler</button></div>
+    <div class="seg views" id="views"><button data-v="play" class="on">Play</button><button data-v="specs">Tech specs</button></div>
+    <button class="cta" id="play"><i></i><span>Play</span></button>
+  </div>
+  <aside class="specs" id="specs"></aside>
+  <div class="foot" id="foot">
+    <div>
+      <div class="eyebrow" id="eyebrow">Algorithmic sequencer</div>
+      <div class="pname" id="pname">T-1</div>
+      <div class="readout"><span id="r-name"></span><b id="r-val"></b></div>
+      <div class="help" id="r-help"></div>
+    </div>
+    <div class="controls">
+      <div class="label">Tracks</div>
+      <div class="seg" id="chips"></div>
+      <div class="hint" id="hint"></div>
+    </div>
+  </div>
+</div>
+<div class="tip" id="tip"></div>
+
+<script src="t1_glb.js"></script>
+<script src="s4_glb.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from "three";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const ease = t => 0.5 - 0.5 * Math.cos(Math.PI * clamp(t, 0, 1));
+const easeInOut = t => (t = clamp(t, 0, 1), t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+// ═══ Scène ══════════════════════════════════════════════════════════════════
+const stage = $("stage");
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });   // transparent : le dégradé de la carte passe derrière
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.6);
+keyLight.position.set(-0.6, 1.2, 0.8);
+scene.add(keyLight);
+
+const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 20);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.enablePan = false;
+controls.minDistance = 0.45; controls.maxPolarAngle = Math.PI * 0.6;
+controls.target.set(0, -0.03, 0);
+
+const shadowTex = (() => {          // ombre douce sous la machine (elle flotte)
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), r = g.createRadialGradient(128, 128, 8, 128, 128, 128);
+  r.addColorStop(0, "rgba(0,0,0,0.28)"); r.addColorStop(1, "rgba(0,0,0,0)");
+  g.fillStyle = r; g.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+})();
+
+const VIEW = new THREE.Vector3(0.42, 0.62, 1.0).normalize();
+function fitDistance(inst) {        // recule la caméra pour que toute la machine tienne dans la carte
+  const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
+  return Math.max(0.64 / Math.tan(hf), (0.34 + inst.depth * 0.6) / Math.tan(vf)) * 1.2;
+}
+function setDistance(d) {
+  const dir = camera.position.clone().sub(controls.target);
+  if (dir.lengthSq() < 1e-6) dir.copy(VIEW);
+  camera.position.copy(controls.target).addScaledVector(dir.normalize(), d);
+}
+function resize() {
+  const r = stage.getBoundingClientRect();
+  renderer.setSize(r.width, r.height);
+  camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+  if (cur) { camTo = fitDistance(cur); controls.maxDistance = camTo * 1.8; if (swap >= 1) setDistance(camTo); }
+}
+addEventListener("resize", resize);
+
+// ═══ Outils communs ════════════════════════════════════════════════════════
+function loadGLB(b64, onLoad) {
+  const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  new GLTFLoader().parse(bin.buffer, "", onLoad, err => { console.error(err); $("loading").textContent = "Couldn’t load the model — keep the .js files next to index.html."; });
+}
+function setupKnob(o, root, markColor = 0xffffff) {   // la molette tourne dans un groupe, avec un repère sur le dessus
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(o), size = box.getSize(new THREE.Vector3());
+  const holder = new THREE.Group(); o.parent.add(holder);
+  holder.position.copy(o.position); holder.quaternion.copy(o.quaternion); holder.scale.copy(o.scale);
+  holder.add(o); o.position.set(0, 0, 0); o.quaternion.identity(); o.scale.set(1, 1, 1);
+  holder.updateMatrixWorld(true);
+  const mark = new THREE.Mesh(new THREE.BoxGeometry(size.x * 0.09, size.x * 0.01, size.x * 0.36), new THREE.MeshBasicMaterial({ color: markColor }));
+  mark.position.copy(box.getCenter(new THREE.Vector3())).add(new THREE.Vector3(0, size.y / 2 + size.x * 0.004, -size.x * 0.2));
+  scene.add(mark); holder.attach(mark);
+  const axis = new THREE.Vector3(0, 1, 0).applyQuaternion(holder.getWorldQuaternion(new THREE.Quaternion()).invert());
+  return { obj: holder, mesh: o, axis, angle: 0 };
+}
+function turn(k, v) {                // v ∈ [0, 1] → −135° … +135°
+  const a = (clamp(v, 0, 1) - 0.5) * 1.5 * Math.PI;
+  k.obj.rotateOnAxis(k.axis, -(a - k.angle)); k.angle = a;
+}
+function pressable(p, depth) {       // direction « vers le bas » dans le repère du parent
+  const a = p.parent.worldToLocal(new THREE.Vector3(0, 0, 0)), b = p.parent.worldToLocal(new THREE.Vector3(0, -depth, 0));
+  p.userData.down = b.sub(a); p.userData.home = p.position.clone(); p.userData.press = 0;
+}
+function pressPos(p, amount) { p.position.copy(p.userData.home).addScaledVector(p.userData.down, amount); }
+
+function show(name, value, help) {
+  $("r-name").textContent = name; $("r-val").textContent = value;
+  if (help !== undefined) $("r-help").textContent = help;
+}
+const tip = $("tip");
+function place(e, text) { tip.textContent = text; tip.style.left = e.clientX + "px"; tip.style.top = e.clientY + "px"; tip.style.opacity = 1; }
+
+// ═══ Son (Web Audio) ════════════════════════════════════════════════════════
+let ac, master, verb, echo, DEST = null, SEND = 1;
+function audio() {
+  if (ac) return;
+  ac = new AudioContext();
+  const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 3;
+  master = ac.createGain(); master.gain.value = 0.7;
+  master.connect(comp); comp.connect(ac.destination);
+  const conv = ac.createConvolver(), len = ac.sampleRate * 2.4, ir = ac.createBuffer(2, len, ac.sampleRate);
+  for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 3; }
+  conv.buffer = ir; verb = ac.createGain(); verb.gain.value = 0.22; verb.connect(conv); conv.connect(comp);
+  const dl = ac.createDelay(2), fb = ac.createGain(), lp = ac.createBiquadFilter();
+  dl.delayTime.value = 0.375; fb.gain.value = 0.32; lp.type = "lowpass"; lp.frequency.value = 2400;
+  echo = ac.createGain(); echo.gain.value = 0.18; echo.connect(dl); dl.connect(lp); lp.connect(fb); fb.connect(dl); lp.connect(comp);
+  Object.assign(echo, { line: dl, fb, lp });
+  S4.audioReady();
+}
+const hz = m => 440 * 2 ** ((m - 69) / 12);
+function env(g, t, a, peak, dur) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
+function out(node, sends = 0.5) {    // DEST : entrée d'une piste du S-4 (ses effets) ; SEND : envois réverbe/écho de la T-1
+  node.connect(DEST || master);
+  if (sends * SEND) { const s = ac.createGain(); s.gain.value = sends * SEND; node.connect(s); s.connect(verb); s.connect(echo); }
+}
+function noise(dur) { const b = ac.createBuffer(1, ac.sampleRate * dur, ac.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; const n = ac.createBufferSource(); n.buffer = b; return n; }
+const VOICES = {
+  kick(t, n, v) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(160 * 2 ** ((n - 57) / 24), t); o.frequency.exponentialRampToValueAtTime(45 * 2 ** ((n - 57) / 24), t + 0.12);
+    env(g, t, 0.003, v, 0.45); o.connect(g); out(g, 0.05); o.start(t); o.stop(t + 0.5);
+  },
+  snare(t, n, v) {
+    const s = noise(0.3), bp = ac.createBiquadFilter(), g = ac.createGain(), o = ac.createOscillator(), og = ac.createGain();
+    bp.type = "bandpass"; bp.frequency.value = 1800 * 2 ** ((n - 60) / 24); bp.Q.value = 0.8; env(g, t, 0.002, v * 0.7, 0.22);
+    o.frequency.setValueAtTime(220 * 2 ** ((n - 60) / 12), t); o.frequency.exponentialRampToValueAtTime(160, t + 0.1); env(og, t, 0.002, v * 0.5, 0.12);
+    s.connect(bp); bp.connect(g); o.connect(og); out(g, 0.35); out(og, 0.2); s.start(t); o.start(t); o.stop(t + 0.2);
+  },
+  hat(t, n, v, dur) {
+    const s = noise(0.2), hp = ac.createBiquadFilter(), g = ac.createGain();
+    hp.type = "highpass"; hp.frequency.value = 7000 + (n - 60) * 40; env(g, t, 0.001, v * 0.35, Math.min(0.03 + dur * 0.4, 0.25));
+    s.connect(hp); hp.connect(g); out(g, 0.2); s.start(t);
+  },
+  bass(t, n, v, dur) {
+    const o = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = "sawtooth"; o.frequency.value = hz(n); lp.type = "lowpass"; lp.Q.value = 6;
+    lp.frequency.setValueAtTime(300 + v * 2600, t); lp.frequency.exponentialRampToValueAtTime(180, t + dur + 0.1);
+    env(g, t, 0.004, v * 0.5, dur + 0.12); o.connect(lp); lp.connect(g); out(g, 0.1); o.start(t); o.stop(t + dur + 0.2);
+  },
+  pluck(t, n, v, dur) {
+    const o1 = ac.createOscillator(), o2 = ac.createOscillator(), lp = ac.createBiquadFilter(), g = ac.createGain();
+    o1.type = "triangle"; o1.frequency.value = hz(n); o2.type = "sine"; o2.frequency.value = hz(n) * 2;
+    lp.type = "lowpass"; lp.frequency.setValueAtTime(3200, t); lp.frequency.exponentialRampToValueAtTime(500, t + 0.25);
+    env(g, t, 0.005, v * 0.35, dur + 0.3); o1.connect(lp); o2.connect(lp); lp.connect(g); out(g, 0.6);
+    o1.start(t); o2.start(t); o1.stop(t + dur + 0.4); o2.stop(t + dur + 0.4);
+  },
+  keys(t, n, v, dur) {
+    const lp = ac.createBiquadFilter(), g = ac.createGain();
+    lp.type = "lowpass"; lp.frequency.value = 900 + v * 1800; env(g, t, 0.02, v * 0.16, dur + 0.5); lp.connect(g); out(g, 0.8);
+    for (const d of [-7, 7]) { const o = ac.createOscillator(); o.type = "sawtooth"; o.frequency.value = hz(n); o.detune.value = d; o.connect(lp); o.start(t); o.stop(t + dur + 0.6); }
+  },
+  bell(t, n, v, dur) {
+    const c = ac.createOscillator(), m = ac.createOscillator(), mg = ac.createGain(), g = ac.createGain();
+    c.frequency.value = hz(n + 12); m.frequency.value = hz(n + 12) * 3.5; mg.gain.setValueAtTime(hz(n) * 2.5, t); mg.gain.exponentialRampToValueAtTime(1, t + 1.2);
+    m.connect(mg); mg.connect(c.frequency); env(g, t, 0.002, v * 0.22, 1.4 + dur); c.connect(g); out(g, 0.9);
+    c.start(t); m.start(t); c.stop(t + 1.6 + dur); m.stop(t + 1.6 + dur);
+  },
+};
+function visual(t, fn) { setTimeout(fn, Math.max(0, (t - ac.currentTime) * 1000)); }
+
+// Pastilles en bas à droite : les 4 pistes de la machine affichée
+function buildChips(names, onPick) {
+  $("chips").innerHTML = "";
+  names.forEach((n, i) => { const b = document.createElement("button"); b.innerHTML = `<i></i>${i + 1} ${n}`; b.onclick = () => onPick(i); $("chips").appendChild(b); });
+}
+function drawChipStates(sel, hits, muted) {
+  [...$("chips").children].forEach((b, i) => { b.className = (i === sel ? "on " : "") + (muted[i] ? "muted " : "") + (hits[i] > 0.5 ? "hit" : ""); });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// T-1 · séquenceur algorithmique (paramètres d'après le guide officiel Torso)
+// ═══════════════════════════════════════════════════════════════════════════
+const T1 = (() => {
+  const KNOBS = [["steps", null], ["pulses", "rotate"], ["cycles", null], ["division", null], ["velocity", "probability"],
+    ["sustain", null], ["pitch", "harmony"], ["length", null], ["tempo", null],
+    ["repeats", "ramp"], ["time", "pace"], ["voicing", "style"], ["range", "phrase"], ["accent", "groove"],
+    ["timing", "delay"], ["scale", "root"], ["channel", null], ["random", "rate"]];
+  const DIVS = [["1/4", 1], ["1/8", 0.5], ["1/8T", 1 / 3], ["1/16", 0.25], ["1/16T", 1 / 6], ["1/32", 0.125]];
+  const TIMES = [["1/8", 0.5], ["1/16", 0.25], ["1/16T", 1 / 6], ["1/32", 0.125], ["1/64", 0.0625]];
+  const LENGTHS = [["1/4 bar", 4], ["1/2 bar", 8], ["1 bar", 16], ["2 bars", 32], ["4 bars", 64]];
+  const STYLES = ["fixed", "ramp", "climb", "up/down", "climb up/down", "fixed · mono", "ramp · mono", "climb · mono", "up/down · mono"];
+  const PHRASES = ["cadence 1", "cadence 2", "cadence 3", "cadence 4", "saw", "triangle", "sine", "pulse"];
+  const GROOVES = ["agogo", "timbales", "congas", "bongo", "saw", "triangle", "sine", "pulse"];
+  const SCALES = [["chrom", [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]], ["major", [0, 2, 4, 5, 7, 9, 11]], ["minor", [0, 2, 3, 5, 7, 8, 10]],
+    ["penta", [0, 3, 5, 7, 10]], ["hira", [0, 2, 3, 7, 8]], ["iwato", [0, 1, 5, 6, 10]], ["tetra", [0, 2, 4, 5]]];
+  const ROOTS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const SOUNDS = ["kick", "snare", "hat", "bass", "pluck", "keys", "bell"];
+  const P = {   // min, max, défaut, affichage, global (commun à toutes les pistes)
+    steps: [1, 16, 16], pulses: [0, 16, 4], rotate: [0, 15, 0], cycles: [1, 4, 1], division: [0, 5, 3, i => DIVS[i][0]],
+    velocity: [0, 127, 100], probability: [0, 100, 0, v => v + "% skip"], sustain: [5, 100, 40, v => v + "%"],
+    pitch: [-24, 24, 0, v => (v > 0 ? "+" : "") + v], harmony: [-3, 3, 0, v => (v > 0 ? "+" : "") + v],
+    length: [0, 4, 2, i => LENGTHS[i][0]], tempo: [60, 180, 120, v => v + " bpm", true],
+    repeats: [0, 8, 0], ramp: [-5, 5, 0, v => (v > 0 ? "up " : v < 0 ? "down " : "") + Math.abs(v)],
+    time: [0, 4, 1, i => TIMES[i][0]], pace: [-5, 5, 0, v => v === 0 ? "even" : v > 0 ? "slow down " + v : "speed up " + -v],
+    voicing: [0, 6, 0], style: [0, 8, 0, i => STYLES[i]], range: [0, 12, 0], phrase: [0, 7, 4, i => PHRASES[i]],
+    accent: [0, 10, 0], groove: [0, 7, 0, i => GROOVES[i]], timing: [50, 75, 50, v => v === 50 ? "straight" : "swing " + v + "%"],
+    delay: [-20, 20, 0, v => (v > 0 ? "+" : "") + v + " ms"], scale: [0, 6, 4, i => SCALES[i][0]], root: [0, 11, 9, i => ROOTS[i]],
+    channel: [0, 6, 0, i => SOUNDS[i]], random: [0, 10, 0], rate: [1, 8, 4, v => "every " + v + " steps"],
+  };
+  const HELP = {
+    steps: "Grid size of the pattern.", pulses: "Notes spread as evenly as possible over the steps — a Euclidean rhythm.",
+    rotate: "Shifts the rhythm along the grid.", cycles: "The pattern drifts a little on each new cycle.",
+    division: "Note rate of the steps.", velocity: "Base loudness.", probability: "Chance that a note is skipped.",
+    sustain: "Note length.", pitch: "Transposes the track within the scale.", harmony: "Moves one chord tone up or down.",
+    length: "Loop length — uneven lengths phase against the bar.", tempo: "Global tempo.",
+    repeats: "Extra hits after each pulse, like a note repeater.", ramp: "Repeats fade in or out.",
+    time: "Spacing between repeats.", pace: "Repeats bounce faster or slower, like a dropped ball.",
+    voicing: "How far the chord moves.", style: "How the chord moves: chords (poly) or arpeggios (mono).",
+    range: "Melodic movement within the scale.", phrase: "Shape of the melodic movement.",
+    accent: "Velocity variation.", groove: "Shape of the accents.", timing: "Swing.", delay: "Pushes the track early or late.",
+    scale: "Notes allowed.", root: "Key of the scale.", channel: "Sound of the track (MIDI channel on the real T-1).",
+    random: "Random variation of velocity and notes.", rate: "How often the random values change.",
+  };
+  const val = (p, v) => (P[p][3] ? P[p][3](v) : String(v));
+  const TRACK_NAMES = ["Kick", "Hat", "Bass", "Keys"];
+  const BANKS = [
+    ["Techno", 124, [{ channel: 0, pulses: 4, sustain: 30 }, { channel: 2, pulses: 12, steps: 16, accent: 6, groove: 1, velocity: 80 },
+      { channel: 3, pulses: 7, pitch: -12, range: 4, phrase: 0, sustain: 25 }, { channel: 5, pulses: 3, steps: 8, division: 1, voicing: 3, style: 2, sustain: 70, velocity: 70 }]],
+    ["Ambient", 84, [{ channel: 0, pulses: 2, velocity: 70 }, { channel: 6, pulses: 5, steps: 13, repeats: 2, time: 1, ramp: -3, velocity: 70 },
+      { channel: 3, pulses: 3, steps: 11, pitch: -12, sustain: 90, range: 3, phrase: 6 }, { channel: 5, pulses: 2, steps: 8, division: 0, voicing: 4, style: 3, sustain: 100, velocity: 60 }]],
+    ["Broken", 132, [{ channel: 0, pulses: 5, steps: 16, rotate: 2 }, { channel: 1, pulses: 3, steps: 16, rotate: 4, repeats: 2, time: 3, pace: 3 },
+      { channel: 3, pulses: 9, steps: 16, pitch: -12, range: 6, phrase: 7, timing: 62 }, { channel: 4, pulses: 7, steps: 12, voicing: 2, style: 7, range: 5, random: 4 }]],
+    ["Minimal", 118, [{ channel: 0, pulses: 4 }, { channel: 2, pulses: 16, accent: 8, groove: 5, velocity: 60, sustain: 10 },
+      { channel: 3, pulses: 5, steps: 16, rotate: 3, pitch: -12, sustain: 20 }, { channel: 4, pulses: 3, steps: 7, length: 3, range: 8, phrase: 5, timing: 58 }]],
+  ];
+  const BTN_NAMES = ["play", "clear", "ctrl", "bank", "pattern", "temp", "mute"];   // Btn_01…07 : rangée du haut puis du bas
+  const OFF = new THREE.Color(0x9a9ea2), WHITE = new THREE.Color(0xffffff), ORANGE = new THREE.Color(0xD85700);
+  const GROOVE_SHAPES = [
+    [1, -1, 0, 1, -1, 0, 1, -1, 1, -1, 0, 1, -1, 0, 1, 0], [1, 0, -1, 1, 0, 1, -1, 0, 1, 0, -1, 1, 0, 1, -1, 1],
+    [0, 1, 1, -1, 0, 1, 1, -1, 0, 1, -1, 1, 0, 1, 1, -1], [1, -1, 1, 1, -1, 1, -1, 1, 1, -1, 1, 1, -1, 1, -1, -1]];
+  const CADENCES = [[0, 2, 4, 2], [0, 4, 3, 1], [0, -1, 1, 4], [4, 2, 0, -3]];
+
+  let bank = 0, tempo = 120, tracks = [], sel = 0, ctrlLatch = false, shiftKey = false, tempSnap = null, clearHeld = false, patternHeld = false;
+  let pads = [], knobs = [], btns = {}, valueView = 0, valueNorm = 0;
+  const glow = new Array(16).fill(0), hitTrack = [0, 0, 0, 0];
+  const ctrlHeld = () => ctrlLatch || shiftKey;
+
+  function track(o) { const t = {}; for (const k in P) if (!P[k][4]) t[k] = P[k][2]; return Object.assign(t, o, { custom: {}, muted: false }); }
+  function pattern(t) {   // rythme euclidien + rotation + pas édités à la main
+    const res = new Array(16).fill(false), rot = t.rotate + (t.cycles > 1 ? t.cycle % t.cycles : 0);
+    for (let i = 0; i < t.steps; i++) res[(i + rot) % t.steps] = ((i * t.pulses) % t.steps) < Math.min(t.pulses, t.steps);
+    for (const s in t.custom) if (+s < t.steps) res[s] = t.custom[s];
+    return res;
+  }
+  function grooveAt(g, i, n) {
+    if (g < 4) return GROOVE_SHAPES[g][i % 16];
+    const x = (i % n) / n; return [2 * x - 1, 1 - 4 * Math.abs(x - 0.5), Math.sin(x * 2 * Math.PI), x < 0.5 ? 1 : -1][g - 4];
+  }
+  function phraseAt(t, i) {   // déplacement mélodique en degrés de la gamme
+    if (!t.range) return 0;
+    const x = (i % t.steps) / t.steps;
+    if (t.phrase < 4) return Math.round(CADENCES[t.phrase][Math.floor(x * 4)] * t.range / 6);
+    return Math.round([x, 1 - Math.abs(2 * x - 1), 0.5 + 0.5 * Math.sin(x * 2 * Math.PI), x < 0.5 ? 1 : 0][t.phrase - 4] * t.range);
+  }
+  function noteOf(t, degree) {
+    const sc = SCALES[t.scale][1], n = sc.length, o = Math.floor(degree / n), d = ((degree % n) + n) % n;
+    return (t.channel === 3 ? 36 : t.channel <= 2 ? 48 : 60) + t.root + sc[d] + 12 * o;
+  }
+  function rnd(t, i, salt) { const k = Math.floor((t.tick + i) / t.rate) * 131 + salt * 977 + t.cycle * 17, x = Math.sin(k * 12.9898 + salt) * 43758.5453; return x - Math.floor(x); }
+  function chordOf(t, i, pulseIndex) {   // accord de 3 notes (pluck, keys, bell), avec voicing et style
+    const size = t.channel >= 4 ? 3 : 1;
+    let tones = [0, 2, 4].slice(0, size).map(d => d + t.pitch + phraseAt(t, i));
+    if (size > 1) tones[1] += t.harmony;
+    if (t.voicing && size > 1) {
+      const st = t.style % 5, k = pulseIndex % (t.voicing + 1);
+      const mv = st === 0 ? t.voicing : st === 1 ? k : st === 2 ? [0, 1, 2, 1][k % 4] * Math.ceil(t.voicing / 2) : Math.abs(((k + t.voicing) % (2 * t.voicing)) - t.voicing);
+      for (let j = 0; j < mv; j++) tones[j % size] += SCALES[t.scale][1].length;
+    }
+    if (t.random) tones = tones.map((d, j) => d + (rnd(t, i, 3 + j) < t.random * 0.04 ? (rnd(t, i, 9) < 0.5 ? -1 : 1) : 0));
+    if (t.style >= 5 && size > 1) tones = [tones[pulseIndex % size]];
+    return tones.map(d => noteOf(t, d));
+  }
+  const sixteenth = () => 60 / tempo / 4;
+  function scheduleTrack(t, ti, horizon) {
+    while (t.next < horizon) {
+      const unit = sixteenth() * 4 * DIVS[t.division][1];
+      t.step = (t.step + 1) % t.steps; t.tick++;
+      if (t.tick * DIVS[t.division][1] * 4 >= LENGTHS[t.length][1] * (t.loops + 1)) { t.loops++; t.step = 0; }
+      if (t.step === 0) t.cycle++;
+      const pat = pattern(t), s = t.step, when = t.next + (s % 2 ? (t.timing - 50) / 50 * unit : 0) + t.delay / 1000;
+      if (pat[s] && !t.muted && !(rnd(t, s, 1) * 100 < t.probability)) {
+        const pulseIndex = pat.slice(0, s + 1).filter(Boolean).length;
+        const acc = t.accent ? grooveAt(t.groove, s, t.steps) * t.accent * 6 : 0;
+        const vel = clamp((t.velocity + acc + (t.random ? (rnd(t, s, 2) - 0.5) * t.random * 6 : 0)) / 127, 0.03, 1);
+        const notes = chordOf(t, s, pulseIndex), dur = unit * t.sustain / 100 * 2, voice = VOICES[SOUNDS[t.channel]];
+        let gap = sixteenth() * 4 * TIMES[t.time][1], at = Math.max(when, ac.currentTime);
+        for (let r = 0; r <= t.repeats; r++) {   // note + répétitions (time, ramp, pace)
+          const rv = Math.max(0.03, vel * (t.ramp > 0 ? (1 - t.ramp * 0.15) ** (t.repeats - r) : (1 + t.ramp * 0.15) ** r));
+          notes.forEach(n => voice(at, n, rv, Math.min(dur, gap * 0.9 || dur)));
+          at += gap; gap *= 1 + t.pace * 0.08;
+          if (at > t.next + unit * 4) break;
+        }
+        if (ti === sel) visual(when, () => { glow[s] = 1; });
+        visual(when, () => { hitTrack[ti] = 1; drawChips(); });
+      }
+      t.next += unit;
+    }
+  }
+  const getP = p => (P[p][4] ? tempo : tracks[sel][p]);
+  function setP(p, v) {
+    const [lo, hi] = P[p]; v = Math.round(clamp(v, lo, hi));
+    if (p === "tempo") { tempo = v; return; }
+    const t = tracks[sel]; if (t[p] === v) return; t[p] = v;
+    if (p === "steps" || p === "pulses" || p === "rotate") t.custom = {};
+    if (p === "pulses") t.pulses = Math.min(t.pulses, t.steps);
+  }
+  const knobParam = k => (ctrlHeld() && k.names[1] ? k.names[1] : k.names[0]);
+  function syncKnobs() { knobs.forEach(k => { if (k) { const p = k.names[0], [lo, hi] = P[p]; turn(k, (getP(p) - lo) / (hi - lo)); } }); }
+  function press(n, on) { if (btns[n]) btns[n].userData.press = on ? 1 : 0; }
+  function loadBank(i) {
+    bank = i; tempo = BANKS[i][1]; tracks = BANKS[i][2].map(track);
+    const t0 = ac ? ac.currentTime + 0.05 : 0;
+    tracks.forEach(t => Object.assign(t, { next: t0, step: -1, tick: 0, cycle: 0, loops: 0 }));
+    show(`Bank ${i + 1} · ${BANKS[i][0]}`, inst.playing ? "playing" : "press play", "BANK on the T-1 loads the next preset.");
+    drawChips(); syncKnobs();
+  }
+  function select(i) { sel = i; drawChips(); syncKnobs(); show(`Track ${i + 1} · ${TRACK_NAMES[i]}`, SOUNDS[tracks[i].channel], "The knobs now edit this track."); }
+  function toggleMute(i) { tracks[i].muted = !tracks[i].muted; drawChips(); show(`Track ${i + 1}`, tracks[i].muted ? "muted" : "unmuted", ""); }
+  function toggleTemp() {   // TEMP : les changements sont annulés quand on le relâche
+    if (!tempSnap) { tempSnap = { tempo, tracks: tracks.map(t => ({ ...t, custom: { ...t.custom } })) }; show("Temp", "on", "Changes are temporary — press TEMP again to snap back."); }
+    else {
+      const keep = tracks.map(t => ({ next: t.next, step: t.step, tick: t.tick, cycle: t.cycle, loops: t.loops }));
+      tempo = tempSnap.tempo; tracks = tempSnap.tracks.map((t, i) => Object.assign(t, keep[i])); tempSnap = null;
+      syncKnobs(); show("Temp", "released", "Back to the stored values.");
+    }
+    press("temp", !!tempSnap);
+  }
+  function drawChips() { if (cur === inst) drawChipStates(sel, hitTrack, tracks.map(t => t.muted)); }
+  function knobFeedback(k, p) {
+    const [lo, hi] = P[p], v = getP(p);
+    if (p === k.names[0]) turn(k, (v - lo) / (hi - lo));
+    valueNorm = (v - lo) / (hi - lo); valueView = 0.9;     // la valeur s'affiche sur les pads, comme sur la T-1
+    show(p + (P[p][4] ? "" : ` · track ${sel + 1}`), val(p, v), HELP[p]);
+    return p.toUpperCase() + " · " + val(p, v);
+  }
+  function padPress(i) {
+    const t = tracks[sel];
+    if (clearHeld) { delete t.custom[i]; show("Clear", `step ${i + 1}`, "Step back to the generated rhythm."); }
+    else if (patternHeld || ctrlHeld()) { if (i < 4) select(i); }
+    else if (i < t.steps) { t.custom[i] = !pattern(t)[i]; glow[i] = 0.8; show(`Step ${i + 1}`, t.custom[i] ? "on" : "off", "Hand edits sit on top of the Euclidean rhythm."); }
+  }
+  function buttonDown(n) {
+    press(n, true);
+    if (n === "play") togglePlay();
+    else if (n === "ctrl") { ctrlLatch = !ctrlLatch; press("ctrl", ctrlHeld()); show("Ctrl", ctrlLatch ? "on" : "off", "Knobs switch to their second function."); }
+    else if (n === "temp") toggleTemp();
+    else if (n === "clear") { clearHeld = true; tracks[sel].custom = {}; show("Clear", `track ${sel + 1}`, "Hold CLEAR and tap a pad to reset one step."); }
+    else if (n === "bank") loadBank((bank + 1) % BANKS.length);
+    else if (n === "pattern") { patternHeld = true; show("Pattern", "hold + pad 1–4", "Selects a track."); }
+    else if (n === "mute") toggleMute(sel);
+  }
+
+  const inst = {
+    id: "t1", name: "T-1", mark: "T1", eyebrow: "Algorithmic sequencer", depth: 0.375, playing: false, holder: new THREE.Group(),
+    hint: "Turn a knob · tap a pad · Shift = second function<br>1–4 track · B next bank · Tab switch instrument · Space play",
+    specs: { title: "T-1 Algorithmic sequencer", price: "699 USD", rows: [
+      ["TRACKS", "16 tracks per pattern · 16 MIDI channels · polyphony on every track"],
+      ["CONTROLS", "18 endless push encoders · 23 RGB silicone pads"],
+      ["SEQUENCING", "Euclidean rhythms · note repeater · voicings & arpeggios · groove · random"],
+      ["STORAGE", "16 banks × 16 patterns · auto-save"],
+      ["I/O", "USB-C (MIDI/power) · MIDI in/out/thru TRS · CV & gate · Ableton Link (Wi-Fi)"],
+      ["BODY", "Matte black aluminium · 304 × 114 × 39 mm · 815 g"]] },
+    init(gltf) {
+      const m = gltf.scene, knobMeshes = [];
+      m.traverse(o => {
+        if (!o.isMesh) return;
+        if (/^Pad_\d+/.test(o.name)) {
+          o.material = o.material.clone(); o.userData.base = o.material.emissive.clone(); o.userData.color = o.material.color.clone();
+          pads[+o.name.slice(4, 6) - 1] = o;
+        } else if (/^Btn_\d+/.test(o.name)) {
+          o.material = o.material.clone(); o.userData.color = o.material.color.clone();
+          const n = BTN_NAMES[+o.name.slice(4, 6) - 1]; btns[n] = o; o.userData.btn = n;
+        } else if (/^Knob_\d+/.test(o.name)) knobMeshes.push(o);
+        if (o.material && o.material.map) o.material.map.anisotropy = 8;
+      });
+      knobMeshes.forEach(o => { const i = +/^Knob_(\d+)/.exec(o.name)[1] - 1; if (!knobs[i]) knobs[i] = Object.assign(setupKnob(o, m), { names: KNOBS[i] }); });
+      m.updateMatrixWorld(true);
+      [...pads, ...Object.values(btns)].forEach(p => pressable(p, 0.0016));
+      tempo = BANKS[0][1]; tracks = BANKS[0][2].map(track);
+    },
+    activate() {
+      buildChips(TRACK_NAMES, i => (ctrlHeld() ? toggleMute(i) : select(i)));
+      drawChips(); syncKnobs();
+      show(`Bank ${bank + 1} · ${BANKS[bank][0]}`, "press play", "Four tracks, each a Euclidean rhythm. Turn the knobs to reshape them.");
+    },
+    start(t0) {
+      tracks.forEach(t => Object.assign(t, { next: t0, step: -1, tick: 0, cycle: 0, loops: 0 }));
+      echo.fb.gain.value = 0.32; echo.lp.frequency.value = 2400;
+    },
+    tick(h) { tracks.forEach((t, i) => scheduleTrack(t, i, h)); echo.line.delayTime.setTargetAtTime(60 / tempo * 0.75, ac.currentTime, 0.1); },
+    stop() {},
+    pickables: () => [...pads.filter(Boolean), ...knobs.filter(Boolean).map(k => k.mesh), ...Object.values(btns)],
+    classify(o) { const pi = pads.indexOf(o); if (pi >= 0) return { pad: pi }; if (o.userData.btn) return { btn: o.userData.btn }; const k = knobs.find(k => k && k.mesh === o); return k ? { knob: k } : null; },
+    label(h) { return h.pad !== undefined ? `STEP ${h.pad + 1}` : h.btn ? h.btn.toUpperCase() : knobParam(h.knob).toUpperCase() + " · " + val(knobParam(h.knob), getP(knobParam(h.knob))); },
+    down(h) { if (h.pad !== undefined) padPress(h.pad); else if (h.btn) buttonDown(h.btn); },
+    knobStart(k) { const p = knobParam(k), [lo, hi] = P[p]; return { p, v0: getP(p), steps: hi - lo <= 16 ? 24 : 2.2 }; },
+    knobMove(k, d, dy) { setP(d.p, d.v0 + dy / d.steps); return knobFeedback(k, d.p); },
+    up() { if (clearHeld) { clearHeld = false; press("clear", false); } if (patternHeld) { patternHeld = false; press("pattern", false); } ["bank", "mute"].forEach(n => press(n, false)); },
+    key(e, down) {
+      if (e.key === "Shift") { shiftKey = down; press("ctrl", ctrlHeld()); }
+      if (!down) return;
+      if (/^[1-4]$/.test(e.key)) select(+e.key - 1);
+      if (e.key === "b" || e.key === "B") loadBank((bank + 1) % BANKS.length);
+      if (e.key === "t" || e.key === "T") toggleTemp();
+      if (e.key === "m" || e.key === "M") toggleMute(sel);
+    },
+    update(dt) {
+      if (!pads.length || !tracks.length) return;
+      press("play", inst.playing);
+      const t = tracks[sel], pat = pattern(t);
+      valueView = Math.max(0, valueView - dt);
+      pads.forEach((p, i) => {
+        if (!p) return;
+        glow[i] = Math.max(0, glow[i] - dt * 4);
+        const on = i < t.steps && pat[i];
+        let lvl, color = p.userData.color, emis = p.userData.base, mix = on ? 0 : 0.75;
+        if (valueView > 0) { const lit = i < Math.round(valueNorm * 16); lvl = lit ? 0.9 : 0.02; color = lit ? WHITE : p.userData.color; emis = lit ? WHITE : p.userData.base; mix = lit ? 0 : 0.8; }
+        else lvl = (t.muted ? 0.05 : on ? 0.35 : i < t.steps ? 0.04 : 0) + glow[i] * (on ? 2.2 : 0.5);
+        p.material.emissive.copy(emis); p.material.emissiveIntensity = lvl;
+        p.material.color.copy(color).lerp(OFF, mix);
+        pressPos(p, on && valueView <= 0 ? glow[i] : 0);
+      });
+      for (const n in btns) { const b = btns[n], k = b.userData.press; pressPos(b, k); b.material.color.copy(b.userData.color).lerp(ORANGE, k * (n === "play" || n === "temp" ? 0.55 : 0.2)); }
+      hitTrack.forEach((h, i) => { hitTrack[i] = Math.max(0, h - dt * 5); });
+    },
+  };
+  return inst;
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// S-4 · sampler sculptant (d'après le guide officiel Torso) : 4 pistes stéréo,
+// chaîne de 5 devices par piste (DISC · MOSAIC · RING · DEFORM · VAST), modulateur, mix, perform, scènes.
+// ═══════════════════════════════════════════════════════════════════════════
+const S4 = (() => {
+  const BPM = 96;
+  const DEVS = ["disc", "mosaic", "ring", "deform", "vast"];
+  const DEV_BTN = { material: "disc", granular: "mosaic", filter: "ring", color: "deform", space: "vast" };   // boutons → devices
+  const SLOT = { disc: "material", mosaic: "granular", ring: "filter", deform: "color", vast: "space" };
+  const DIVS = ["1/16", "1/8", "3/16", "1/4"];
+  const pct = v => Math.round(v * 100);
+  const bip = v => { const x = Math.round((v - 0.5) * 200); return (x > 0 ? "+" : "") + x; };
+  const semis = (v, r) => { const x = Math.round((v - 0.5) * 2 * r); return (x > 0 ? "+" : "") + x + " st"; };
+  // [nom, défaut, affichage, bipolaire]
+  const PARAMS = {
+    disc: [["speed", 0.5, v => ["½×", "1×", "2×"][Math.min(2, Math.floor(v * 3))]], ["pitch", 0.5, v => semis(v, 12), 1], ["tempo", 0.5, () => BPM + " sync"],
+      ["start", 0, v => Math.round(v * 15) + 1], ["length", 1, v => Math.max(1, Math.round(v * 16)) + " st."], ["offset", 0.5, v => bip(v) + " ms", 1],
+      ["xfade", 0.2, pct], ["level", 0.8, pct]],
+    mosaic: [["pitch", 0.5, v => semis(v, 24), 1], ["rate", 0.4, v => Math.round(1 + v * 7) + " gr."], ["size", 0.4, pct], ["contour", 0.5, pct],
+      ["scan", 0.5, pct], ["spray", 0.2, pct], ["pattern", 0, pct], ["wet", 0, pct]],
+    ring: [["cutoff", 1, v => Math.round(60 * 2 ** (v * 8.4)) + " Hz"], ["resonance", 0.15, pct], ["decay", 0, pct], ["pitch", 0.5, v => semis(v, 24), 1],
+      ["slope", 0, v => ["low-pass", "band-pass", "high-pass"][Math.min(2, Math.floor(v * 3))]], ["tone", 0.5, bip, 1], ["scale", 0, () => "chromatic"], ["wet", 1, pct]],
+    deform: [["drive", 0.1, pct], ["compress", 0.2, pct], ["crush", 0, pct], ["tilt", 0.5, bip, 1],
+      ["noise", 0, pct], ["noise decay", 0.4, pct], ["noise tone", 0.6, pct], ["wet", 1, pct]],
+    vast: [["delay", 0.15, pct], ["time", 0.5, v => DIVS[Math.min(3, Math.floor(v * 4))]], ["reverb", 0.25, pct], ["size", 0.5, pct],
+      ["feedback", 0.35, pct], ["spread", 0.3, pct], ["tone", 0.5, bip, 1], ["decay", 0.5, pct]],
+    mod: [["rate", 0.35, v => (0.05 * 2 ** (v * 8)).toFixed(2) + " Hz"], ["depth", 0, pct], ["shape", 0, v => ["sine", "triangle", "square", "random"][Math.min(3, Math.floor(v * 4))]],
+      ["target", 0, v => ["cutoff", "pitch", "drive", "delay"][Math.min(3, Math.floor(v * 4))]], ["phase", 0, pct], ["smooth", 0.3, pct], ["offset", 0.5, bip, 1], ["sync", 1, v => v > 0.5 ? "on" : "off"]],
+  };
+  const MACROS = [["cutoff", 0.5], ["grains", 0], ["drive", 0], ["reverb", 0], ["delay", 0], ["pitch", 0.5], ["crush", 0], ["tempo", 0.5]];
+  const PUNCH = ["stutter", "reverse", "tape stop", "filter"];
+  const HELP = {
+    disc: "DISC — sample playback. Pitch, start and length reshape the loop.", mosaic: "MOSAIC — rhythmic granular processing with 64 grains. Raise WET to hear it.",
+    ring: "RING — morphing resonant filter bank: cutoff, resonance and slope.", deform: "DEFORM — dual-band distortion: drive, compression, crush, noise.",
+    vast: "VAST — hybrid delay and reverb.", mix: "MIX — levels and DJ-style filters. △□⬡○ start/stop tracks 1–4.",
+    mod: "MOD — one wave modulator per track, routed to cutoff, pitch, drive or delay.", perform: "PERFORM — 8 macros on the knobs; hold △□⬡○ for the punch-in effects.",
+  };
+  const ACTIONS = {   // boutons △ □ ⬡ ○ sous l'écran, selon la vue
+    disc: ["load", "rewind", "reverse", "record"], mosaic: [null, null, null, "lock"], ring: [null, null, null, null], deform: [null, null, null, null],
+    vast: [null, null, null, "freeze"], mix: ["track 1", "track 2", "track 3", "track 4"], mod: ["wave", "random", "follow", "adsr"], perform: PUNCH,
+  };
+  const SHAPES = ["triangle", "square", "hexagon", "circle"];
+  const TRACKS = ["Drums", "Bass", "Chords", "Texture"];
+  const CHORDS = [[57, 60, 64, 67], [53, 57, 60, 64], [55, 59, 62, 65], [52, 55, 59, 62]];   // Am7 · Fmaj7 · G7 · Em7
+  const SAMPLES = [   // « samples » de chaque piste : motifs sur 16 pas (LOAD passe au suivant)
+    [{ kick: [0, 7, 8, 10], snare: [4, 12, 15], hat: [0, 2, 3, 4, 6, 8, 10, 11, 12, 14, 15] }, { kick: [0, 3, 6, 10, 12], snare: [4, 13], hat: [2, 6, 10, 14] }],
+    [{ notes: [[0, 0], [3, 0], [6, 12], [8, 0], [11, 7], [14, 0]] }, { notes: [[0, 0], [2, 0], [4, 0], [7, 12], [10, 0], [12, 3]] }],
+    [{ chords: [0, 6, 10] }, { chords: [0, 8] }],
+    [{ arp: [2, 5, 9, 13] }, { arp: [1, 3, 7, 9, 11, 15] }],
+  ];
+  const SCENES = [   // scènes : variations instantanées de tous les réglages
+    {}, { ring: { cutoff: 0.55, resonance: 0.5 }, vast: { delay: 0.35, feedback: 0.55, reverb: 0.4 } },
+    { mosaic: { wet: 0.8, rate: 0.6, size: 0.25, spray: 0.5 }, deform: { crush: 0.4 } }, { deform: { drive: 0.6, compress: 0.6, noise: 0.3 }, ring: { slope: 0.5, cutoff: 0.6 } },
+  ];
+  const ORANGE = new THREE.Color(0xD85700);
+
+  const fresh = () => Object.fromEntries(Object.entries(PARAMS).map(([d, ps]) => [d, Object.fromEntries(ps.map(p => [p[0], p[1]]))]));
+  const tracks = TRACKS.map((n, i) => ({ name: n, p: fresh(), sample: 0, level: [0.85, 0.7, 0.55, 0.6][i], dj: 0.5, on: true, reverse: false, step: -1, chain: null, an: null, meter: 0 }));
+  tracks[3].p.vast.reverb = 0.5; tracks[3].p.vast.delay = 0.35; tracks[2].p.vast.reverb = 0.35; tracks[0].p.deform.drive = 0.2;
+  const macros = MACROS.map(m => m[1]);
+  let sel = 0, view = "boot", volume = 0.8, scene = 0, lock = false, punch = [0, 0, 0, 0], tapeK = 1;
+  let knobs = [], btns = {}, screen = null, step = -1, next = 0, bar = 0, grains = [], bootT = 0, modPhase = 0;
+  const hits = [0, 0, 0, 0];
+
+  // ── son : une chaîne d'effets par piste ──
+  function curve(drive, crush) {
+    const n = 2048, c = new Float32Array(n), k = 1 + drive * 24, q = 2 ** (16 - crush * 13);
+    for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.round(Math.tanh(k * x) / Math.tanh(k) * q) / q; }
+    return c;
+  }
+  function buildTrack(tr) {
+    const N = n => ac[`create${n}`]();
+    const input = N("Gain"), dDry = N("Gain"), dWet = N("Gain"), shaper = N("WaveShaper"), comp = N("DynamicsCompressor"), lowT = N("BiquadFilter"), highT = N("BiquadFilter");
+    const rIn = N("Gain"), rDry = N("Gain"), rWet = N("Gain"), filt = N("BiquadFilter"), toneF = N("BiquadFilter");
+    const dj = N("BiquadFilter"), vol = N("Gain"), an = N("Analyser"), dSend = N("Gain"), rSend = N("Gain");
+    const dl = ac.createDelay(2), fb = N("Gain"), fbF = N("BiquadFilter"), nzG = N("Gain"), nzF = N("BiquadFilter");
+    lowT.type = "lowshelf"; lowT.frequency.value = 650; highT.type = "highshelf"; highT.frequency.value = 650; shaper.oversample = "2x";
+    toneF.type = "highshelf"; toneF.frequency.value = 1500; dj.type = "allpass"; an.fftSize = 256;
+    input.connect(dDry); input.connect(shaper); shaper.connect(comp); comp.connect(lowT); lowT.connect(highT); highT.connect(dWet);
+    dDry.connect(rIn); dWet.connect(rIn);
+    rIn.connect(rDry); rIn.connect(filt); filt.connect(toneF); toneF.connect(rWet); rDry.connect(dj); rWet.connect(dj);
+    dj.connect(vol); vol.connect(an); an.connect(master);
+    vol.connect(dSend); dSend.connect(dl); dl.connect(fbF); fbF.connect(fb); fb.connect(dl); fbF.connect(master);
+    vol.connect(rSend); rSend.connect(verb);
+    const hiss = noise(2); hiss.loop = true; nzF.type = "bandpass"; nzF.Q.value = 0.8; nzG.gain.value = 0;
+    hiss.connect(nzF); nzF.connect(nzG); nzG.connect(input); hiss.start();
+    tr.chain = { input, dDry, dWet, shaper, comp, lowT, highT, rDry, rWet, filt, toneF, dj, vol, dSend, rSend, dl, fb, fbF, nzG, nzF };
+    tr.an = an; tr.buf = new Uint8Array(an.frequencyBinCount);
+  }
+  const eff = (tr, d, n) => tr.p[d][n];
+  function macro(i) { return macros[i] - MACROS[i][1]; }      // décalage relatif du macro i
+  function apply(tr) {   // applique tous les réglages de la piste au son
+    const c = tr.chain; if (!c) return;
+    const t = ac.currentTime, D = tr.p.deform, R = tr.p.ring, V = tr.p.vast;
+    const drive = clamp(D.drive + macro(2), 0, 1), crush = clamp(D.crush + macro(6), 0, 1);
+    c.shaper.curve = curve(drive, crush);
+    c.comp.threshold.setTargetAtTime(-4 - D.compress * 34, t, 0.05); c.comp.ratio.setTargetAtTime(1 + D.compress * 11, t, 0.05);
+    c.lowT.gain.setTargetAtTime((0.5 - D.tilt) * 18, t, 0.03); c.highT.gain.setTargetAtTime((D.tilt - 0.5) * 18, t, 0.03);
+    c.dDry.gain.setTargetAtTime(1 - D.wet, t, 0.03); c.dWet.gain.setTargetAtTime(D.wet, t, 0.03);
+    c.nzF.frequency.setTargetAtTime(200 * 2 ** (D["noise tone"] * 6), t, 0.05);
+    const cut = clamp(R.cutoff + (macros[0] - 0.5) * 1.2 - punch[3] * 0.7 + modValue(tr, "cutoff"), 0, 1);
+    c.filt.type = ["lowpass", "bandpass", "highpass"][Math.min(2, Math.floor(R.slope * 3))];
+    c.filt.frequency.setTargetAtTime(60 * 2 ** (cut * 8.4) * 2 ** ((R.pitch - 0.5) * 4), t, 0.03);
+    c.filt.Q.setTargetAtTime(0.5 + R.resonance * 14 + R.decay * 18, t, 0.03);
+    c.toneF.gain.setTargetAtTime((R.tone - 0.5) * 20, t, 0.03);
+    c.rDry.gain.setTargetAtTime(1 - R.wet, t, 0.03); c.rWet.gain.setTargetAtTime(R.wet, t, 0.03);
+    const djv = tr.dj - 0.5;   // filtre DJ de la vue MIX : gauche = passe-bas, droite = passe-haut
+    c.dj.type = Math.abs(djv) < 0.03 ? "allpass" : djv < 0 ? "lowpass" : "highpass";
+    c.dj.frequency.setTargetAtTime(djv < 0 ? 20000 * 2 ** (djv * 2 * 8) : 20 * 2 ** (djv * 2 * 9), t, 0.03);
+    c.vol.gain.setTargetAtTime(tr.on ? tr.level * tr.p.disc.level * volume : 0, t, 0.03);
+    const div = [0.25, 0.5, 0.75, 1][Math.min(3, Math.floor(V.time * 4))] * 60 / BPM;
+    c.dl.delayTime.setTargetAtTime(div, t, 0.05);
+    c.dSend.gain.setTargetAtTime(clamp(V.delay + macro(4) + modValue(tr, "delay"), 0, 1) * 0.9, t, 0.05);
+    c.fb.gain.setTargetAtTime(Math.min(0.92, V.feedback * 0.9), t, 0.05);
+    c.fbF.type = V.tone < 0.5 ? "lowpass" : "highpass";
+    c.fbF.frequency.setTargetAtTime(V.tone < 0.5 ? 400 * 2 ** (V.tone * 2 * 5.5) : 30 * 2 ** ((V.tone - 0.5) * 2 * 6), t, 0.05);
+    c.rSend.gain.setTargetAtTime(clamp(V.reverb + macro(3), 0, 1) * (0.5 + V.size * 0.6) * (0.6 + V.decay * 0.6), t, 0.05);
+  }
+  const applyAll = () => tracks.forEach(apply);
+  function modValue(tr, target) {   // modulateur WAVE de la piste
+    const M = tr.p.mod; if (!M.depth || ["cutoff", "pitch", "drive", "delay"][Math.min(3, Math.floor(M.target * 4))] !== target) return 0;
+    const ph = (modPhase * 0.05 * 2 ** (M.rate * 8) + M.phase) % 1, sh = Math.min(3, Math.floor(M.shape * 4));
+    const w = sh === 0 ? Math.sin(ph * 2 * Math.PI) : sh === 1 ? 1 - 4 * Math.abs(ph - 0.5) : sh === 2 ? (ph < 0.5 ? 1 : -1) : Math.sin(Math.floor(ph * 8) * 78.233) ;
+    return (w + (M.offset - 0.5) * 2) * M.depth * 0.5;
+  }
+
+  // ── séquence : chaque piste joue son « sample » (motif) ──
+  function hitTrack(ti, t, s) {
+    const tr = tracks[ti], D = tr.p.disc, G = tr.p.mosaic, S = SAMPLES[ti][tr.sample];
+    const pitch = Math.round((D.pitch - 0.5) * 24 + (macros[5] - 0.5) * 24 + modValue(tr, "pitch") * 24 - (1 - tapeK) * 24);
+    const events = [];
+    if (ti === 0) { for (const v of ["kick", "snare", "hat"]) if (S[v].includes(s)) events.push([VOICES[v], [v === "kick" ? 57 + pitch : 60 + pitch], v === "hat" ? 0.05 : 0.12, v === "hat" ? 0.7 : 1]); }
+    else if (ti === 1) { const e = S.notes.find(n => n[0] === s); if (e) events.push([VOICES.bass, [CHORDS[bar % 4][0] - 24 + e[1] + pitch], 0.2, 1]); }
+    else if (ti === 2) { if (S.chords.includes(s)) events.push([VOICES.keys, CHORDS[bar % 4].map(n => n + pitch), 60 / BPM * 0.9, 1]); }
+    else { const k = S.arp.indexOf(s); if (k >= 0) events.push([VOICES.bell, [CHORDS[bar % 4][(k + bar) % 4] + 12 + pitch], 0.3, 0.8]); }
+    if (!events.length) return false;
+    const wet = clamp(G.wet + macro(1) + punch[0], 0, 1);
+    const grainOn = lock || (wet > 0 && Math.abs(Math.sin(s * 91.7 + bar * 13.1 + ti * 7)) < wet);
+    const reps = grainOn ? Math.round(1 + G.rate * 7) : 0, gap = 60 / BPM / 4 * (0.1 + G.size * 0.6), off = (D.offset - 0.5) * 0.04;
+    DEST = tr.chain.input; SEND = 0;
+    for (const [voice, notes, dur, vel] of events) {
+      for (let r = 0; r <= reps; r++) {
+        const jit = r ? Math.sin((s + r) * 57.3) * 0.5 * G.spray * gap : 0;
+        const gp = r ? Math.round((G.pitch - 0.5) * 48 + (G.pattern ? Math.round(Math.sin((r + s) * 12.7) * 12 * G.pattern) : 0)) : 0;
+        const env = r ? lerp(0.85, 0.55, G.contour) ** r : 1;
+        notes.forEach(n => voice(Math.max(t + off + r * gap + jit, ac.currentTime), n + gp, vel * env, reps ? Math.min(dur, gap * (0.6 + G.contour)) : dur));
+      }
+      if (tr.p.deform.noise > 0) {   // bruit qui suit l'enveloppe du son (DEFORM · NOISE)
+        const g = tr.chain.nzG.gain, a = tr.p.deform.noise * 0.08;
+        g.setValueAtTime(a, t); g.setTargetAtTime(0, t + 0.01, 0.02 + tr.p.deform["noise decay"] * 0.3);
+      }
+    }
+    DEST = null; SEND = 1;
+    if (grainOn) visual(t, () => { for (let r = 0; r <= reps; r++) grains.push({ x: (s / 16 + (G.scan - 0.5) * 0.3 + (Math.random() - 0.5) * G.spray * 0.3 + 1) % 1, y: 0.5 + (Math.random() - 0.5) * 0.8, w: 0.01 + G.size * 0.05, life: 1, d: r * gap }); });
+    return true;
+  }
+
+  // ── écran animé (dessiné en direct dans une texture) ──
+  const SC = document.createElement("canvas"); SC.width = 1032; SC.height = 604;
+  const g = SC.getContext("2d"), screenTex = new THREE.CanvasTexture(SC);
+  screenTex.flipY = false; screenTex.colorSpace = THREE.SRGBColorSpace; screenTex.anisotropy = 8;
+  const C = { bg: "#070707", panel: "#121212", ink: "#D0D0D0", mid: "#8A8A88", dim: "#3A3A3A", hi: "#FFFFFF", or: "#D85700" };
+  const MONO = '"JetBrains Mono", ui-monospace, monospace', SANS = 'Aeonik, Inter, sans-serif';
+  const X0 = 186, Y0 = 16, PW = 830, PH = 572;
+  const wave = Array.from({ length: 4 }, (_, ti) => Array.from({ length: 240 }, (_, i) => {   // forme d'onde de chaque « sample »
+    const s = (i / 240) * 16, f = s - Math.floor(s), hitHere = [0, 4, 7, 8, 10, 12].includes(Math.floor(s)) || ti > 0;
+    return (hitHere ? Math.exp(-f * (ti === 0 ? 5 : 1.5)) : 0.15) * (0.55 + 0.45 * Math.abs(Math.sin(i * 1.7 + ti))) * (ti === 2 ? 0.7 : 1);
+  }));
+  function txt(s, x, y, size = 20, col = C.ink, align = "left", font = MONO) { g.font = `${size}px ${font}`; g.fillStyle = col; g.textAlign = align; g.fillText(s, x, y); }
+  function header(title) {
+    g.fillStyle = C.ink; g.fillRect(X0 + 22, Y0 + 20, 30, 30); txt(String(sel + 1), X0 + 37, Y0 + 43, 20, C.panel, "center");
+    txt(String(scene + 1).padStart(3, "0"), X0 + 66, Y0 + 44, 22); txt(title, X0 + PW / 2, Y0 + 44, 20, C.mid, "center");
+    txt(`${Math.round(BPM * tapeK + (macros[7] - 0.5) * 40)}.0`, X0 + PW - 46, Y0 + 44, 22, C.ink, "right");
+    g.fillStyle = cur === inst && inst.playing ? C.or : C.dim; g.fillRect(X0 + PW - 34, Y0 + 24, 12, 22);
+  }
+  function paramGrid(names, values, fmts, bips, y) {
+    names.forEach((n, i) => {
+      const x = X0 + 22 + (i % 4) * 200, yy = y + Math.floor(i / 4) * 78;
+      txt(n.toUpperCase(), x, yy, 17, C.mid);
+      txt(fmts[i](values[i]), x + 186, yy, 15, C.ink, "right");
+      g.fillStyle = C.dim; g.fillRect(x, yy + 12, 186, 14);
+      g.fillStyle = C.ink;
+      if (bips[i]) { const c = x + 93, w = (values[i] - 0.5) * 186; g.fillRect(Math.min(c, c + w), yy + 12, Math.abs(w), 14); g.fillStyle = C.mid; g.fillRect(c - 1, yy + 8, 2, 22); }
+      else g.fillRect(x, yy + 12, 186 * values[i], 14);
+    });
+  }
+  function actionRow(list) {
+    list.forEach((a, i) => {
+      if (!a) return;
+      const x = X0 + 22 + i * 200, y = Y0 + PH - 26, on = (view === "perform" && punch[i]) || (a === "lock" && lock) || (a === "reverse" && tracks[sel].reverse)
+        || (view === "mix" && tracks[i].on) || (view === "mod" && i === 0);
+      g.strokeStyle = on ? C.or : C.ink; g.lineWidth = 2.4; g.beginPath();
+      const cx = x + 10, cy = y - 6;
+      if (i === 0) { g.moveTo(cx, cy - 9); g.lineTo(cx + 9, cy + 7); g.lineTo(cx - 9, cy + 7); g.closePath(); }
+      else if (i === 1) g.rect(cx - 8, cy - 8, 16, 16);
+      else if (i === 2) for (let k = 0; k <= 6; k++) { const an = k * Math.PI / 3; g[k ? "lineTo" : "moveTo"](cx + 9 * Math.cos(an), cy + 8 * Math.sin(an)); }
+      else g.arc(cx, cy, 8.5, 0, Math.PI * 2);
+      g.stroke(); txt(a.toUpperCase(), x + 28, y, 17, on ? C.or : C.ink);
+    });
+  }
+  function drawScreen(dt) {
+    g.fillStyle = C.bg; g.fillRect(0, 0, SC.width, SC.height);
+    g.save(); g.translate(150, SC.height - 34); g.rotate(-Math.PI / 2);
+    txt("S-4", 0, 0, 78, "#9A9A98", "left", SANS); txt("sculpting sampler", 150, -4, 36, "#9A9A98", "left", SANS); g.restore();
+    g.fillStyle = C.panel; g.fillRect(X0, Y0, PW, PH);
+    const tr = tracks[sel], ax = X0 + 22, ay = Y0 + 78, aw = PW - 44, ah = 250;
+    if (view === "boot") {
+      bootT += dt;
+      txt("S-4", X0 + PW / 2, Y0 + 300, 150, C.ink, "center", SANS); txt("sculpting sampler", X0 + PW / 2, Y0 + 360, 34, C.mid, "center", SANS);
+      g.fillStyle = C.dim; g.fillRect(X0 + PW / 2 - 150, Y0 + 420, 300, 6); g.fillStyle = C.ink; g.fillRect(X0 + PW / 2 - 150, Y0 + 420, 300 * Math.min(1, bootT / 1.6), 6);
+      txt("torso electronics · os 2.0", X0 + PW / 2, Y0 + 480, 18, C.mid, "center");
+      if (bootT > 1.8) setView("disc", true);
+      return;
+    }
+    const titles = { disc: "DISC", mosaic: "MOSAIC", ring: "RING", deform: "DEFORM", vast: "VAST", mix: "MIX", mod: "MOD 1 · WAVE", perform: "PERFORM" };
+    header(titles[view]);
+    const playPos = inst.playing ? ((step + (ac ? (ac.currentTime - (next - 60 / BPM / 4)) / (60 / BPM / 4) : 0)) / 16 + 1) % 1 : 0;
+    if (view === "disc" || view === "mosaic") {
+      const w = wave[sel], D = tr.p.disc, st = Math.round(D.start * 15) / 16, ln = Math.max(1, Math.round(D.length * 16)) / 16;
+      for (let i = 0; i < w.length; i++) {
+        const x = ax + i / w.length * aw, inLoop = ((i / w.length - st + 1) % 1) < ln, a = w[i] * ah * 0.45 * (view === "mosaic" ? 0.6 : 1);
+        g.fillStyle = view === "mosaic" ? C.dim : inLoop ? C.ink : C.dim; g.fillRect(x, ay + ah / 2 - a, aw / w.length * 0.7, a * 2);
+      }
+      if (view === "mosaic") {
+        grains = grains.filter(q => (q.life -= dt * 1.6) > 0);
+        grains.forEach(q => { g.fillStyle = `rgba(230,230,228,${q.life})`; g.fillRect(ax + q.x * aw, ay + q.y * ah - 30, Math.max(3, q.w * aw), 60 * q.life); });
+        g.fillStyle = C.or; g.fillRect(ax + tr.p.mosaic.scan * aw, ay, 2, ah);
+        if (lock) txt("LOCKED", ax + aw, ay + 14, 16, C.or, "right");
+      }
+      if (inst.playing) { g.fillStyle = C.hi; g.fillRect(ax + ((tr.reverse ? 1 - playPos : playPos)) * aw, ay, 2, ah); }
+    } else if (view === "ring") {
+      const R = tr.p.ring, cut = R.cutoff, slope = Math.min(2, Math.floor(R.slope * 3));
+      if (tr.an) tr.an.getByteFrequencyData(tr.buf);
+      for (let b = 0; b < 48; b++) {
+        const f = b / 47, d = f - cut;
+        let resp = slope === 0 ? (d < 0 ? 1 : Math.exp(-d * 9)) : slope === 2 ? (d > 0 ? 1 : Math.exp(d * 9)) : Math.exp(-Math.abs(d) * 7);
+        resp *= 1 + R.resonance * 2.5 * Math.exp(-(d * d) * 300);
+        const live = tr.buf ? tr.buf[Math.floor(f * 100)] / 255 : 0;
+        const h = clamp(resp * (0.25 + live * 0.9), 0, 1.4) * ah * 0.62;
+        g.fillStyle = Math.abs(d) < 0.025 ? C.hi : C.ink; g.fillRect(ax + b * aw / 48 + 2, ay + ah - h, aw / 48 - 5, h);
+      }
+      g.fillStyle = C.or; g.fillRect(ax + cut * aw, ay, 2, ah);
+    } else if (view === "deform") {
+      const D = tr.p.deform, cv = curve(D.drive, D.crush);
+      g.strokeStyle = C.dim; g.lineWidth = 2; g.strokeRect(ax + aw / 2 - ah / 2, ay, ah, ah);
+      g.strokeStyle = C.ink; g.lineWidth = 4; g.beginPath();
+      for (let i = 0; i < 200; i++) { const x = i / 199, y = cv[Math.floor(x * 2047)]; g[i ? "lineTo" : "moveTo"](ax + aw / 2 - ah / 2 + x * ah, ay + ah / 2 - y * ah / 2); }
+      g.stroke();
+      const lvl = tr.meter; g.fillStyle = C.or; g.beginPath(); g.arc(ax + aw / 2 - ah / 2 + (0.5 + lvl / 2) * ah, ay + ah / 2 - cv[Math.floor((0.5 + lvl / 2) * 2047)] * ah / 2, 8, 0, Math.PI * 2); g.fill();
+      for (let i = 0; i < D.noise * 120; i++) { g.fillStyle = C.mid; g.fillRect(ax + Math.random() * 200, ay + Math.random() * ah, 3, 3); }
+    } else if (view === "vast") {
+      const V = tr.p.vast, div = [0.25, 0.5, 0.75, 1][Math.min(3, Math.floor(V.time * 4))];
+      for (let k = 0; k < 12; k++) { const x = ax + k * div * aw / 3, a = V.delay * V.feedback ** k * ah * 1.4 + (k ? 0 : ah * 0.6); if (x > ax + aw) break; g.fillStyle = k ? C.ink : C.mid; g.fillRect(x, ay + ah - Math.min(a, ah), 6, Math.min(a, ah)); }
+      g.strokeStyle = C.ink; g.lineWidth = 3; g.beginPath();
+      for (let i = 0; i < 200; i++) { const x = i / 199, y = V.reverb * Math.exp(-x * (6 - V.decay * 5)) * (0.7 + 0.3 * Math.sin(i * 0.9 + modPhase * 3)); g[i ? "lineTo" : "moveTo"](ax + x * aw, ay + ah - y * ah); }
+      g.stroke();
+    } else if (view === "mix") {
+      tracks.forEach((t, i) => {
+        const x = ax + 40 + i * 200, lv = t.on ? t.level : 0;
+        g.fillStyle = C.dim; g.fillRect(x, ay + 30, 24, 200); g.fillStyle = C.ink; g.fillRect(x, ay + 30 + 200 * (1 - lv), 24, 200 * lv);
+        g.fillStyle = C.dim; g.fillRect(x + 36, ay + 30, 10, 200); g.fillStyle = C.hi; g.fillRect(x + 36, ay + 230 - 200 * t.meter, 10, 200 * t.meter);
+        g.strokeStyle = C.ink; g.lineWidth = 4; g.beginPath(); const a = -Math.PI / 2 + (t.dj - 0.5) * 1.5 * Math.PI; g.moveTo(x + 100, ay + 60); g.lineTo(x + 100 + Math.cos(a) * 26, ay + 60 + Math.sin(a) * 26); g.stroke();
+        g.strokeStyle = C.dim; g.beginPath(); g.arc(x + 100, ay + 60, 30, 0, Math.PI * 2); g.stroke();
+        txt(t.name.toUpperCase(), x, ay + 262, 16, i === sel ? C.hi : C.mid);
+      });
+    } else if (view === "mod") {
+      g.strokeStyle = C.dim; g.setLineDash([6, 8]); g.beginPath(); g.moveTo(ax, ay + ah / 2); g.lineTo(ax + aw, ay + ah / 2); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = C.ink; g.lineWidth = 4; g.beginPath();
+      const M = tr.p.mod, sh = Math.min(3, Math.floor(M.shape * 4));
+      for (let i = 0; i < 300; i++) {
+        const ph = (i / 300 * 2 + M.phase + modPhase * 0.05 * 2 ** (M.rate * 8)) % 1;
+        const w = sh === 0 ? Math.sin(ph * 2 * Math.PI) : sh === 1 ? 1 - 4 * Math.abs(ph - 0.5) : sh === 2 ? (ph < 0.5 ? 1 : -1) : Math.sin(Math.floor(ph * 8) * 78.233);
+        g[i ? "lineTo" : "moveTo"](ax + i / 300 * aw, ay + ah / 2 - w * (0.15 + M.depth * 0.85) * ah * 0.42);
+      }
+      g.stroke();
+    } else if (view === "perform") {
+      macros.forEach((v, i) => {
+        const x = ax + i * 66; g.fillStyle = C.dim; g.fillRect(x, ay + 10, 46, 230); g.fillStyle = C.ink; g.fillRect(x, ay + 10 + 230 * (1 - v), 46, 230 * v);
+        txt(String(i + 1), x + 23, ay + 266, 16, C.mid, "center");
+      });
+      PUNCH.forEach((n, i) => {
+        const x = ax + 560, y = ay + 10 + i * 62; g.strokeStyle = C.ink; g.lineWidth = 2.5;
+        g.fillStyle = punch[i] ? C.ink : C.panel; g.fillRect(x, y, 226, 48); g.strokeRect(x, y, 226, 48);
+        txt(n.toUpperCase(), x + 113, y + 32, 18, punch[i] ? C.panel : C.ink, "center");
+      });
+    }
+    if (view === "perform") paramGrid(MACROS.map(m => m[0]), macros, MACROS.map(() => pct), MACROS.map(() => 0), Y0 + 372);
+    else if (view === "mix") paramGrid(["level 1", "level 2", "level 3", "level 4", "filter 1", "filter 2", "filter 3", "filter 4"],
+      [...tracks.map(t => t.level), ...tracks.map(t => t.dj)], [pct, pct, pct, pct, bip, bip, bip, bip], [0, 0, 0, 0, 1, 1, 1, 1], Y0 + 372);
+    else { const ps = PARAMS[view]; paramGrid(ps.map(p => p[0]), ps.map(p => tr.p[view][p[0]]), ps.map(p => p[2]), ps.map(p => p[3]), Y0 + 372); }
+    actionRow(ACTIONS[view]);
+  }
+
+  // ── commandes ──
+  function knobInfo(i) {   // molette i : 0 = volume, 1–8 = les 8 réglages de la vue
+    if (i === 0) return { name: "volume", get: () => volume, set: v => (volume = v), fmt: pct };
+    const k = i - 1, tr = tracks[sel];
+    if (view === "perform") return { name: `macro ${k + 1} · ${MACROS[k][0]}`, get: () => macros[k], set: v => (macros[k] = v), fmt: pct };
+    if (view === "mix") return k < 4 ? { name: `${tracks[k].name} level`, get: () => tracks[k].level, set: v => (tracks[k].level = v), fmt: pct }
+      : { name: `${tracks[k - 4].name} filter`, get: () => tracks[k - 4].dj, set: v => (tracks[k - 4].dj = v), fmt: bip };
+    const d = view === "boot" ? "disc" : view, p = PARAMS[d][k];
+    return { name: `${d} · ${p[0]}`, get: () => tr.p[d][p[0]], set: v => (tr.p[d][p[0]] = v), fmt: p[2] };
+  }
+  function syncKnobs() { knobs.forEach((k, i) => { if (k) turn(k, knobInfo(i).get()); }); }
+  function setView(v, quiet) {
+    view = v; syncKnobs();
+    for (const n in btns) btns[n].userData.sel = (DEV_BTN[n] === v || n === v) ? 1 : 0;
+    if (!quiet) show(`Track ${sel + 1} · ${v}`, v === "disc" ? SAMPLES[sel][tracks[sel].sample] && `sample ${tracks[sel].sample + 1}` : "", HELP[v]);
+  }
+  function selectTrack(i) { sel = i; syncKnobs(); drawChips(); show(`Track ${i + 1} · ${TRACKS[i]}`, view.toUpperCase(), "Each track has its own chain of five devices."); }
+  function action(i, down) {
+    const a = ACTIONS[view]?.[i], tr = tracks[sel];
+    if (view === "perform") { punch[i] = down ? 1 : 0; applyAll(); if (down) show("Punch-in", PUNCH[i], "Hold to apply."); return; }
+    if (!down || !a) return;
+    if (view === "mix") { tracks[i].on = !tracks[i].on; apply(tracks[i]); show(`Track ${i + 1}`, tracks[i].on ? "started" : "stopped", HELP.mix); drawChips(); }
+    else if (a === "load") { tr.sample = (tr.sample + 1) % SAMPLES[sel].length; show("Load", `sample ${tr.sample + 1}`, "A new sample for this track."); }
+    else if (a === "rewind") { step = -1; show("Rewind", "start", ""); }
+    else if (a === "reverse") { tr.reverse = !tr.reverse; show("Reverse", tr.reverse ? "on" : "off", ""); }
+    else if (a === "record") show("Record", "—", "Recording needs a real S-4 and an input.");
+    else if (a === "lock") { lock = !lock; show("Mosaic lock", lock ? "frozen" : "free", "LOCK freezes the grain buffer."); }
+    else show(a, "—", "Not active in this demo.");
+  }
+  function drawChips() { if (cur === inst) drawChipStates(sel, hits, tracks.map(t => !t.on)); }
+
+  const inst = {
+    id: "s4", name: "S-4", mark: "S4", eyebrow: "Sculpting sampler", depth: 0.645, playing: false, holder: new THREE.Group(),
+    hint: "Devices: the 5 buttons right of the screen · △□⬡○ = on-screen actions<br>MIX · MOD · PERFORM views · TRACK / scene · Tab switch · Space play",
+    specs: { title: "S-4 Sculpting sampler", price: "999 USD", rows: [
+      ["TRACKS", "4 stereo tracks · 5 devices each: material, granular, filter, color, space"],
+      ["DEVICES", "DISC · TAPE · POLY (material) · MOSAIC · RING · DEFORM · VAST"],
+      ["MODULATION", "4 modulators per track: wave, random, follow, ADSR"],
+      ["PERFORM", "12 macros: 8 sliders + 4 punch-in actions · 128 scenes"],
+      ["CONTROLS", "9 endless encoders · 21 buttons"],
+      ["AUDIO", "24-bit / 48 kHz stereo · USB audio 10 in / 10 out"],
+      ["I/O", "2 × ¼″ in · 2 × ¼″ out · headphones · MIDI TRS · analog sync · USB-C"],
+      ["DISPLAY", "3.5″ high-resolution colour LCD"],
+      ["BODY", "Matte black aluminium · 242 × 156 × 39 mm · 820 g"]] },
+    init(gltf) {
+      const m = gltf.scene, knobMeshes = [];
+      m.traverse(o => {
+        if (!o.isMesh) return;
+        if (/^Knob_\d+/.test(o.name)) knobMeshes.push(o);
+        else if (/^Btn_/.test(o.name)) { o.material = o.material.clone(); o.userData.color = o.material.color.clone(); o.userData.btn = o.name.slice(4); btns[o.userData.btn] = o; }
+        else if (o.name === "Screen") screen = o;
+        if (o.material && o.material.map) o.material.map.anisotropy = 8;
+      });
+      knobMeshes.forEach(o => { knobs[+/^Knob_(\d+)/.exec(o.name)[1] - 1] = setupKnob(o, m, 0x8a8a88); });
+      m.updateMatrixWorld(true);
+      Object.values(btns).forEach(b => pressable(b, 0.0045));
+      if (screen) screen.material = new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false });
+      syncKnobs();
+    },
+    activate() {
+      buildChips(TRACKS, selectTrack); drawChips(); syncKnobs();
+      show(`Track ${sel + 1} · ${TRACKS[sel]}`, "press play", "Four stereo tracks, each running through five devices. Pick a device on the buttons next to the screen.");
+    },
+    audioReady() { tracks.forEach(tr => { buildTrack(tr); apply(tr); }); },
+    start(t0) { step = -1; bar = 0; next = t0; tapeK = 1; applyAll(); if (view === "boot") bootT = 1.8; },
+    tick(h) {
+      const sx = () => 60 / (BPM * tapeK + (macros[7] - 0.5) * 40) / 4;
+      while (next < h) {
+        step = (step + 1) % 16; if (step === 0) bar++;
+        const t = next + (step % 2 ? 0.012 : 0);
+        tracks.forEach((tr, i) => {
+          if (!tr.on) return;
+          const D = tr.p.disc, st = Math.round(D.start * 15), ln = Math.max(1, Math.round(D.length * 16));
+          let s = (st + (step % ln)) % 16; if (tr.reverse || punch[1]) s = 15 - s;
+          if (hitTrack(i, t, s)) visual(t, () => { hits[i] = 1; drawChips(); if (btns.play) btns.play.userData.flash = 1; });
+        });
+        next += sx();
+      }
+    },
+    stop() { tapeK = 1; },
+    pickables: () => [...knobs.filter(Boolean).map(k => k.mesh), ...Object.values(btns)],
+    classify(o) { if (o.userData.btn) return { btn: o.userData.btn }; const k = knobs.find(k => k && k.mesh === o); return k ? { knob: k } : null; },
+    label(h) {
+      if (h.btn) { const s = SHAPES.indexOf(h.btn); return s >= 0 ? (ACTIONS[view]?.[s] || "—").toUpperCase() : (DEV_BTN[h.btn] ? `${h.btn} · ${DEV_BTN[h.btn]}` : h.btn).toUpperCase(); }
+      const k = knobInfo(knobs.indexOf(h.knob)); return k.name.toUpperCase() + " · " + k.fmt(k.get());
+    },
+    down(h) {
+      const n = h.btn, b = btns[n]; if (b) b.userData.press = 1;
+      const s = SHAPES.indexOf(n);
+      if (s >= 0) action(s, true);
+      else if (DEV_BTN[n]) setView(DEV_BTN[n]);
+      else if (n === "mix" || n === "perform" || n === "mod") setView(n);
+      else if (n === "play") togglePlay();
+      else if (n === "track") selectTrack((sel + 1) % 4);
+      else if (n === "scene") {
+        scene = (scene + 1) % SCENES.length;
+        tracks.forEach(tr => { const f = fresh(); for (const d in SCENES[scene]) Object.assign(f[d], SCENES[scene][d]); f.disc.level = tr.p.disc.level; tr.p = f; });
+        applyAll(); syncKnobs(); show("Scene", String(scene + 1).padStart(3, "0"), "Scenes recall every setting at once.");
+      }
+      else show(n, "—", "Not active in this demo.");
+    },
+    knobStart(k) { const i = knobs.indexOf(k); return { i, info: knobInfo(i) }; },
+    knobMove(k, d, dy) {
+      if (d.v0 === undefined) d.v0 = d.info.get();
+      const v = clamp(d.v0 + dy / 220, 0, 1); d.info.set(v); turn(k, v); applyAll();
+      show(d.info.name, d.info.fmt(v), d.i ? HELP[view] || "" : "");
+      return d.info.name.toUpperCase() + " · " + d.info.fmt(v);
+    },
+    up() { Object.values(btns).forEach(b => (b.userData.press = 0)); if (view === "perform" && punch.some(Boolean)) { punch = [0, 0, 0, 0]; applyAll(); } },
+    key(e, down) {
+      if (!down) return;
+      if (/^[1-4]$/.test(e.key)) selectTrack(+e.key - 1);
+      const vk = { q: "disc", w: "mosaic", e: "ring", r: "deform", t: "vast", m: "mix", p: "perform", o: "mod" }[e.key.toLowerCase()];
+      if (vk) setView(vk);
+    },
+    update(dt) {
+      modPhase += dt;
+      if (inst.playing && punch[2]) tapeK = Math.max(0.05, tapeK - dt * 1.2); else tapeK = Math.min(1, tapeK + dt * 3);   // TAPE STOP
+      if (inst.playing && tracks.some(t => t.p.mod.depth > 0)) applyAll();
+      tracks.forEach((t, i) => {
+        if (t.an && inst.playing) { t.an.getByteTimeDomainData(t.buf); let m = 0; for (const v of t.buf) m = Math.max(m, Math.abs(v - 128) / 128); t.meter = Math.max(m, t.meter - dt * 1.5); }
+        else t.meter = Math.max(0, t.meter - dt * 1.5);
+        hits[i] = Math.max(0, hits[i] - dt * 5);
+      });
+      drawScreen(dt); screenTex.needsUpdate = true;
+      for (const n in btns) {
+        const b = btns[n];
+        b.userData.flash = Math.max(0, (b.userData.flash || 0) - dt * 4);
+        pressPos(b, b.userData.press);
+        const lit = n === "play" ? (inst.playing ? 0.35 + b.userData.flash * 0.4 : 0) : (b.userData.sel || 0) * 0.6;
+        b.material.color.copy(b.userData.color).lerp(ORANGE, lit);
+      }
+    },
+  };
+  return inst;
+})();
+
+const INSTS = { t1: T1, s4: S4 };
+let cur = null, prev = null, swap = 1, camFrom = 2, camTo = 2;
+
+// ═══ Lecture ══════════════════════════════════════════════════════════════
+async function togglePlay() { audio(); await ac.resume(); setPlaying(!cur.playing); }
+function setPlaying(on) {
+  if (!cur) return;
+  cur.playing = on;
+  $("play").classList.toggle("on", on); $("play").querySelector("span").textContent = on ? "Stop" : "Play";
+  if (on) cur.start(ac.currentTime + 0.06); else cur.stop();
+  $("r-val").textContent = on ? "playing" : "stopped";
+}
+$("play").onclick = togglePlay;
+setInterval(() => { if (cur && cur.playing && ac) cur.tick(ac.currentTime + 0.12); }, 25);
+
+// ═══ Fiche technique ═══════════════════════════════════════════════════════
+let specsOpen = false;
+function renderSpecs() {
+  const s = cur.specs;
+  $("specs").innerHTML = `<h3>${s.title}</h3><dl>${s.rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl><div class="price"><span>Price</span><span>${s.price}</span></div>`;
+}
+$("views").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  specsOpen = b.dataset.v === "specs";
+  [...$("views").children].forEach(x => x.classList.toggle("on", x === b));
+  renderSpecs(); $("specs").classList.toggle("open", specsOpen);
+});
+
+// ═══ Passage T-1 ↔ S-4 : fondu + glissement ════════════════════════════════
+function fade(inst, alpha) {   // opacité de toute la machine (matériaux passés en transparent pendant la transition)
+  inst.holder.traverse(o => {
+    if (!o.material) return;
+    for (const m of [].concat(o.material)) {
+      const u = m.userData;
+      if (u.baseOpacity === undefined) { u.baseOpacity = m.opacity; u.baseTransparent = m.transparent; u.baseDepthWrite = m.depthWrite; }
+      const tr = alpha < 0.999 || u.baseTransparent;
+      if (m.transparent !== tr) { m.transparent = tr; m.needsUpdate = true; }
+      m.opacity = u.baseOpacity * alpha; m.depthWrite = u.baseDepthWrite && alpha > 0.5;
+    }
+  });
+}
+function switchTo(id) {
+  const nxt = INSTS[id];
+  if (!nxt.ready || nxt === cur || swap < 1) return;
+  if (cur && cur.playing) setPlaying(false);
+  prev = cur; cur = nxt; swap = prev ? 0 : 1;
+  [...$("switch").children].forEach(b => b.classList.toggle("on", b.dataset.id === id));
+  $("mark").textContent = cur.mark;
+  cur.holder.visible = true;
+  camFrom = camera.position.distanceTo(controls.target); camTo = fitDistance(cur); controls.maxDistance = camTo * 1.8;
+  if (!prev) camera.position.copy(controls.target).addScaledVector(VIEW, camTo);
+  const foot = $("foot");
+  const swapText = () => { $("pname").textContent = cur.name; $("eyebrow").textContent = cur.eyebrow; $("hint").innerHTML = cur.hint; cur.activate(); if (specsOpen) renderSpecs(); };
+  if (prev) { foot.classList.add("fade"); setTimeout(() => { swapText(); foot.classList.remove("fade"); }, 380); fade(cur, 0); }
+  else swapText();
+}
+$("switch").addEventListener("click", e => { const b = e.target.closest("button"); if (b) switchTo(b.dataset.id); });
+
+// ═══ Chargement des deux machines ══════════════════════════════════════════
+function mount(inst, b64) {
+  loadGLB(b64, gltf => {
+    const m = gltf.scene, box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3());
+    m.position.sub(box.getCenter(new THREE.Vector3()));   // centré, quelle que soit l'origine dans Blender
+    inst.holder.add(m); scene.add(inst.holder); inst.holder.visible = false;
+    const sh = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 1.35, size.z * 1.6), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
+    sh.rotation.x = -Math.PI / 2; sh.position.y = -size.y / 2 - 0.09; inst.holder.add(sh);
+    inst.init(gltf); inst.ready = true;
+    if (!cur && inst === T1) { $("loading").remove(); switchTo("t1"); }
+  });
+}
+resize();
+mount(T1, window.T1_GLB);
+mount(S4, window.S4_GLB);
+
+// ═══ Pointeur et clavier ═══════════════════════════════════════════════════
+const ray = new THREE.Raycaster(), ptr = new THREE.Vector2();
+let drag = null;
+function pick(e) {
+  if (!cur || swap < 1) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  ptr.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ptr, camera);
+  const h = ray.intersectObjects(cur.pickables(), false)[0];
+  return h ? cur.classify(h.object) : null;
+}
+renderer.domElement.addEventListener("pointerdown", e => {
+  const h = pick(e); if (!h) return;
+  if (h.knob) { drag = { k: h.knob, y: e.clientY, d: cur.knobStart(h.knob) }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); }
+  else { audio(); ac.resume(); cur.down(h); }
+});
+renderer.domElement.addEventListener("pointermove", e => {
+  if (drag) { place(e, cur.knobMove(drag.k, drag.d, drag.y - e.clientY)); return; }
+  const h = pick(e);
+  renderer.domElement.style.cursor = h ? "pointer" : "grab";
+  if (h) place(e, cur.label(h)); else tip.style.opacity = 0;
+});
+renderer.domElement.addEventListener("pointerleave", () => (tip.style.opacity = 0));
+addEventListener("pointerup", () => { if (drag) { drag = null; controls.enabled = true; } if (cur) cur.up(); });
+addEventListener("keydown", e => {
+  if (e.code === "Space") { e.preventDefault(); togglePlay(); return; }
+  if (e.key === "Tab") { e.preventDefault(); switchTo(cur === T1 ? "s4" : "t1"); return; }
+  if (cur) cur.key(e, true);
+});
+addEventListener("keyup", e => { if (cur) cur.key(e, false); });
+
+// ═══ Boucle ═══════════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  if (cur) {
+    if (swap < 1) {   // l'ancienne machine glisse à gauche en s'effaçant, la nouvelle arrive de la droite en apparaissant
+      swap = Math.min(1, swap + dt / 1.3);
+      const kOut = easeInOut(swap / 0.65), kIn = easeInOut((swap - 0.3) / 0.7);
+      setDistance(lerp(camFrom, camTo, easeInOut(swap)));
+      if (prev) { prev.holder.position.x = -kOut * 0.9; prev.holder.rotation.y = kOut * 0.35; fade(prev, 1 - kOut); }
+      cur.holder.position.x = (1 - kIn) * 0.9; cur.holder.rotation.y = -(1 - kIn) * 0.35; fade(cur, kIn);
+      if (swap >= 1 && prev) { prev.holder.visible = false; prev.holder.position.x = 0; prev.holder.rotation.y = 0; fade(prev, 1); prev = null; fade(cur, 1); }
+    }
+    cur.holder.position.y = Math.sin(t * 1.2) * 0.006;
+    cur.update(dt);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+});
+window.TORSO = { T1, S4, camera, controls, renderer, scene, pick, switchTo };   // pour le débogage dans la console
+</script>
+</body>
+</html>
