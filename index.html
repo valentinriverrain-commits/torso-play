@@ -1047,7 +1047,8 @@ function mount(inst, b64) {
     const sh = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 1.35, size.z * 1.6), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
     sh.rotation.x = -Math.PI / 2; sh.position.y = -size.y / 2 - 0.09; inst.holder.add(sh);
     inst.init(gltf); inst.ready = true;
-    if (!cur && inst === T1) { $("loading").remove(); switchTo("t1"); }
+    const want = location.hash === "#s4" ? S4 : T1;            // index.html#s4 ouvre directement le S-4
+    if (!cur && inst === want) { $("loading").remove(); switchTo(want.id); }
   });
 }
 resize();
